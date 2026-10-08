@@ -14,29 +14,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
+      # 1. Get the repository code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Authenticate GitHub with AWS using OIDC
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: arn:aws:iam::479606007486:role/GitHubActionsECR
           aws-region: us-east-2
 
+      # 3. Log in to Amazon ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      # 4. Build the Docker image
       - name: Build Docker image
         run: |
-          docker build -t my-docker-app .
+          docker build -t backend .
 
+      # 5. Tag the Docker image for ECR
       - name: Tag Docker image
         run: |
-          docker tag my-docker-app:latest \
-            123456789012.dkr.ecr.ca-central-1.amazonaws.com/my-docker-app:latest
+          docker tag backend:latest \
+            479606007486.dkr.ecr.us-east-2.amazonaws.com/backend:latest
 
+      # 6. Push the image to ECR
       - name: Push Docker image
         run: |
           docker push \
-            123456789012.dkr.ecr.ca-central-1.amazonaws.com/my-docker-app:latest
+            479606007486.dkr.ecr.us-east-2.amazonaws.com/backend:latest
