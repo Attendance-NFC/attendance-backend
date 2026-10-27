@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
 import { docClient } from "../db.js"
-import { PutCommand } from "@aws-sdk/lib-dynamodb"
+import { PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb"
 import { randomUUID } from "crypto"
 
 export async function createUser(req: Request, res: Response){
@@ -48,4 +48,24 @@ export async function createUser(req: Request, res: Response){
         console.error("createUser failed:", err);
         return res.status(500).json({ error: "Internal server error"})
     }
+}
+
+export async function getTeachers(req: Request, res: Response){
+    try{
+        const command = new QueryCommand({
+            TableName: "users_table",
+            IndexName: "role_index",
+            KeyConditionExpression: "#role = :role",
+            ExpressionAttributeNames: { "#role": "role"},
+            ExpressionAttributeValues: { ":role": "teacher" }
+        })
+        
+        const result = await docClient.send(command);
+        const teachers = (result.Items ?? []).map(({ user_id, name }) => ({ user_id, name }));
+        return res.json(teachers);        
+    } catch(err) {
+        console.error("getTeachers failed:", err);
+        return res.status(500).json({ error: "Internal server error"})
+    }
+
 }
