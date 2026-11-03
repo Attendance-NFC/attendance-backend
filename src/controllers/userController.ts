@@ -58,6 +58,25 @@ export async function createUser(req: Request, res: Response){
     }
 }
 
+export async function getStudents(req: Request, res: Response){
+    try {
+        const command = new QueryCommand({
+            TableName: "users_table",
+            IndexName: "role_index",
+            KeyConditionExpression: "#role = :role",
+            ExpressionAttributeNames: { "#role": "role"},
+            ExpressionAttributeValues: { ":role": "student" }
+        })
+        
+        const result = await docClient.send(command);
+        const students = (result.Items ?? []).map(({ user_id, name }) => ({ user_id, name }));
+        return res.json(students);        
+    } catch (err){
+        console.error("getStudents failed:", err);
+        return res.status(500).json({ error: "Internal server error"})
+    }
+}
+
 export async function getTeachers(req: Request, res: Response){
     try{
         const command = new QueryCommand({
