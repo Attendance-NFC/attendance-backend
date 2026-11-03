@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
 import { docClient } from "../db.js"
-import { PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb"
+import { PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb"
 import { randomUUID } from "crypto"
 
 export async function createUser(req: Request, res: Response){
@@ -28,21 +28,29 @@ export async function createUser(req: Request, res: Response){
 
         const generatedUUID = randomUUID();
         const hashedPassword = await bcrypt.hash(password, 10);
-        const command = new PutCommand({
+        const usersResponse = await docClient.send(new PutCommand({
             TableName: "users_table",
             Item: {
                 user_id: generatedUUID,
                 name: name,
-                email: email,
+                email: normalizedEmail,
                 password_hash: hashedPassword,
                 role: role,
                 status: cardStatus
             }
-        })
+        }))
 
-        const response = await docClient.send(command);
-        console.log("Success:", response);
-        return res.status(201).json({ success: true, user_id: generatedUUID });
+        const cardsResponse = await docClient.send(new PutCommand({
+            TableName: "cards_table",
+            Item:{
+                card_id: cardId,
+                status: cardStatus,
+                user_id: generatedUUID
+            }
+        }))
+
+        console.log("Success:", usersResponse, cardsResponse);
+        return res.status(201).json({ success: true, user_id: generatedUUID, card_id: cardId});
 
     } catch (err){
         console.error("createUser failed:", err);
@@ -68,4 +76,39 @@ export async function getTeachers(req: Request, res: Response){
         return res.status(500).json({ error: "Internal server error"})
     }
 
+}
+
+export async function getUsers(req: Request, res: Response) {
+  try {
+    const usersResult = await docClient.send(new ScanCommand({ TableName: "users_table" }));
+    const users = usersResult.Items ?? [];
+
+    // For each user, look up their card and flatten it onto the response.
+    const usersWithCards = await Promise.all(
+      users.map(async (user) => {
+        const cardResult = await docClient.send(
+          new QueryCommand({
+            TableName: "cards_table",
+            IndexName: "user_card_index",
+            KeyConditionExpression: "user_id = :userId",
+            ExpressionAttributeValues: { ":userId": user.user_id },
+          })
+        );
+        const card = cardResult.Items?.[0];
+        return {
+          user_id: user.user_id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          card_id: card?.card_id ?? null,
+          card_status: card?.status ?? null,
+        };
+      })
+    );
+
+    return res.status(200).json(usersWithCards);
+  } catch (err) {
+    console.error("getUsers failed:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 }
