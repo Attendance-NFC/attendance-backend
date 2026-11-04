@@ -3,6 +3,7 @@ import express, { type Express, type Request, type Response } from "express";
 import cors from 'cors';
 import serverless from "serverless-http"
 import { loginRouter } from './routes/loginRoute.js'
+import { adminRouter } from './routes/adminRoute.js'
 
 const app:Express = express();
 const PORT = process.env.PORT;
@@ -17,6 +18,7 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.use("/", loginRouter)
+app.use("/admin", adminRouter)
 
 // Lambda entry point — API Gateway invokes this directly
 export const handler = serverless(app);
