@@ -24,14 +24,6 @@ app.get('/api/users', (req, res) => {
     res.json({ message: "Success" });
 });
 
-// Handle all invalid routes
-app.use((req, res) => {
-    res.status(404).json({
-        error: "Route not found",
-        path: req.originalUrl
-    });
-});
-
 // Lambda entry point — API Gateway invokes this directly
 export const handler = serverless(app);
 
