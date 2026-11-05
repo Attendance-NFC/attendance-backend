@@ -20,6 +20,10 @@ app.get("/", (req: Request, res: Response) => {
 app.use("/", loginRouter)
 app.use("/admin", adminRouter)
 
+app.get('/api/users', (req, res) => {
+    res.json({ message: "Success" });
+});
+
 // Handle all invalid routes
 app.use((req, res) => {
     res.status(404).json({
