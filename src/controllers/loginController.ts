@@ -1,21 +1,21 @@
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
+import { QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { docClient } from "../db.js";
+import { generateAccessToken, generateRefreshToken } from "./tokenController.js";
 
-// Testing email and password:
-// testing@gmail.com
-// testingPassword
-const testPassword = "testingPassword";
-const testEmail = "testing@gmail.com";
+const USERS_TABLE = process.env.USERS_TABLE ?? "users_table";
 
-// Computed once when this module is first loaded, not on every request.
-let hashedPasswordPromise: Promise<string> | null = null;
-function getHashedTestPassword(): Promise<string> {
-  if (!hashedPasswordPromise) {
-    hashedPasswordPromise = bcrypt.hash(testPassword, 10);
-  }
-  return hashedPasswordPromise;
-}
+const REFRESH_TOKEN_COOKIE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days, matches tokenController's refresh token expiry
+
+type UserRecord = {
+  user_id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  password_hash: string;
+};
 
 export async function login(req: Request, res: Response) {
   try {
@@ -25,21 +25,54 @@ export async function login(req: Request, res: Response) {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const hashedPassword = await getHashedTestPassword();
-    const passwordMatches = await bcrypt.compare(password, hashedPassword);
     const cleanedEmail = email.trim().toLowerCase();
 
-    if (!passwordMatches || cleanedEmail !== testEmail) {
+    // Look up the user by email via the EmailIndex GSI — Users is keyed by
+    // user_id on the base table, so this can't be a direct GetItem.
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: USERS_TABLE,
+        IndexName: "email_index",
+        KeyConditionExpression: "email = :email",
+        ExpressionAttributeValues: { ":email": cleanedEmail },
+      })
+    );
+
+    const user = result.Items?.[0] as UserRecord | undefined;
+
+    // Same generic error for "no such user" and "wrong password" — don't
+    // let a client tell the two apart.
+    if (!user) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    const JWT_SECRET = process.env.JWT_SECRET;
-    if (!JWT_SECRET) {
-      throw new Error("JWT_SECRET environment variable is not set");
+    const passwordMatches = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatches) {
+      return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    const token = jwt.sign({ foo: "bar" }, JWT_SECRET, { expiresIn: "2h" });
-    return res.json({ token });
+    if (user.status !== "Active") {
+      return res.status(403).json({ error: "This account is not active" });
+    }
+
+    const authenticatedUser = { user_id: user.user_id, role: user.role, name: user.name };
+
+    const accessToken = generateAccessToken(authenticatedUser);
+    const refreshToken = await generateRefreshToken(user.user_id);
+
+    // httpOnly: JavaScript can't read this cookie at all, even via an XSS
+    // bug — only the browser sends it automatically on requests to this API.
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: true, // requires HTTPS in prod; allows plain HTTP in local dev
+      sameSite: 'none',
+      maxAge: REFRESH_TOKEN_COOKIE_MAX_AGE_MS,
+    });
+
+    return res.json({
+      accessToken,
+      user: { id: user.user_id, name: user.name, role: user.role },
+    });
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ error: "Something went wrong. Try again." });

@@ -1,5 +1,6 @@
 
 import 'dotenv/config'
+import cookieParser from "cookie-parser";
 import express, { type Express, type Request, type Response } from "express";
 import cors from 'cors';
 import serverless from "serverless-http";
@@ -13,7 +14,8 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN;
 
 // Middleware
 app.use(express.json());
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
+app.use(cookieParser());
 
 // Health check
 app.get("/", (req: Request, res: Response) => {
