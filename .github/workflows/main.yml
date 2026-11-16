@@ -53,6 +53,7 @@ jobs:
           aws lambda update-function-code \
             --function-name Attendance-Backend \
             --image-uri 479606007486.dkr.ecr.us-east-2.amazonaws.com/backend:latest
+            | jq 'del(.Environment)'
       
       # 8. Wait for Lambda update to finish
       - name: Wait for Lambda update
