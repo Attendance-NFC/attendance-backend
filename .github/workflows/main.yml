@@ -33,7 +33,7 @@ jobs:
       # 4. Build the Docker image
       - name: Build Docker image
         run: |
-          docker build -t backend .
+          docker build --provenance=false --sbom=false -t backend .
 
       # 5. Tag the Docker image for ECR
       - name: Tag Docker image
