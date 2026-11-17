@@ -5,6 +5,15 @@ import { docClient } from "../db.js"
 import { PutCommand, QueryCommand, ScanCommand, BatchGetCommand, GetCommand } from "@aws-sdk/lib-dynamodb"
 import { randomUUID } from "crypto"
 
+
+const USERS_TABLE = process.env.USERS_TABLE ?? "users_table";
+const CARDS_TABLE = process.env.CARDS_TABLE ?? "cards_table";
+const ENROLLMENTS_TABLE = process.env.ENROLLMENTS_TABLE ?? "enrollments_table";
+const CLASSROOMS_TABLE = process.env.CLASSROOMS_TABLE ?? "classrooms_table";
+const SCHEDULE_TABLE = process.env.SCHEDULE_TABLE ?? "schedules_table";
+const ROOM_ACCESS_TABLE = process.env.ROOM_ACCESS_TABLE ?? "room_access_table";
+const ROOMS_TABLE = process.env.ROOMS_TABLE ?? "rooms_table";
+
 export async function createUser(req: Request, res: Response){
     try{
         const { name, email, password, role, cardId, cardStatus } = req.body as { name?: string; email: string; password: string; role: string; cardId: string; cardStatus: string;  }
@@ -132,43 +141,45 @@ export async function getUsers(req: Request, res: Response) {
   }
 }
 
+
+
 export async function getUserById(req: Request, res: Response) {
   try {
     const { userId } = req.params;
- 
+
     if (!userId) {
       return res.status(400).json({ error: "Missing user id" });
     }
- 
+
     // 1. The user record itself.
     const userResult = await docClient.send(
       new GetCommand({
-        TableName: 'users_table',
+        TableName: USERS_TABLE,
         Key: { user_id: userId },
       })
     );
- 
+
     if (!userResult.Item) {
       return res.status(404).json({ error: "User not found" });
     }
- 
+
     // 2. Their card, via the UserCardIndex GSI (Cards is keyed by card_id,
     //    not user_id, on the base table).
     const cardResult = await docClient.send(
       new QueryCommand({
-        TableName: 'cards_table',
+        TableName: CARDS_TABLE,
         IndexName: "user_card_index",
         KeyConditionExpression: "user_id = :userId",
         ExpressionAttributeValues: { ":userId": userId },
       })
     );
     const card = cardResult.Items?.[0] ?? null;
- 
+
     // 3. Which classrooms they're enrolled in, via the UserClassroomsIndex
     //    GSI (Enrollments is keyed by classroom_id on the base table).
     const enrollmentsResult = await docClient.send(
       new QueryCommand({
-        TableName: 'enrollments_table',
+        TableName: ENROLLMENTS_TABLE,
         IndexName: "user_classrooms_index",
         KeyConditionExpression: "user_id = :userId",
         ExpressionAttributeValues: { ":userId": userId },
@@ -177,7 +188,7 @@ export async function getUserById(req: Request, res: Response) {
     const classroomIds: string[] = [
       ...new Set(enrollmentsResult.Items?.map((item) => item.classroom_id) ?? []),
     ];
- 
+
     let classrooms: {
       classroom_id: string;
       class_name: string;
@@ -186,25 +197,25 @@ export async function getUserById(req: Request, res: Response) {
       start_time: string;
       end_time: string;
     }[] = [];
- 
+
     if (classroomIds.length > 0) {
       // 4. Classroom names, fetched in one batch rather than one call each.
       const classroomsResult = await docClient.send(
         new BatchGetCommand({
           RequestItems: {
-            ['classrooms_table']: {
+            [CLASSROOMS_TABLE]: {
               Keys: classroomIds.map((id) => ({ classroom_id: id })),
             },
           },
         })
       );
       const classroomsById = Object.fromEntries(
-        (classroomsResult.Responses?.['classrooms_table'] ?? []).map((c) => [
+        (classroomsResult.Responses?.[CLASSROOMS_TABLE] ?? []).map((c) => [
           c.classroom_id,
           c,
         ])
       );
- 
+
       // 5. Every scheduled meeting time for each classroom, via the
       //    ClassroomScheduleIndex GSI — a class meeting multiple times a
       //    week returns multiple items here, all handled below.
@@ -220,19 +231,18 @@ export async function getUserById(req: Request, res: Response) {
           )
         )
       );
- 
+
       // flatMap: one row per scheduled meeting, not one row per classroom —
       // this is what makes a twice-a-week class show up as two rows.
       classrooms = classroomIds.flatMap((id, i) => {
-        const scheduleResult = scheduleResults[i];
-        if (!scheduleResult) {
-            console.error(`No schedule result at index ${i} for classroom ${id}`);
-            return []; // skip this classroom's schedule rather than crash the whole request
-        }
-
         const className = classroomsById[id]?.class_name ?? "Unknown";
-        const scheduleItems = scheduleResult.Items ?? [];
- 
+        // scheduleResults[i] can't actually be undefined here — scheduleResults
+        // was built from classroomIds.map(...), so the two arrays always have
+        // the same length and line up index-for-index. Optional chaining is
+        // just satisfying TypeScript's static check (noUncheckedIndexedAccess),
+        // not guarding against a real runtime case.
+        const scheduleItems = scheduleResults[i]?.Items ?? [];
+
         return scheduleItems.map((s) => ({
           classroom_id: id,
           class_name: className,
@@ -243,7 +253,42 @@ export async function getUserById(req: Request, res: Response) {
         }));
       });
     }
- 
+
+    // 6. Direct room access grants, via the UserRoomAccessIndex GSI
+    //    (RoomAccess is keyed by room_id on the base table).
+    const roomAccessResult = await docClient.send(
+      new QueryCommand({
+        TableName: 'room_access_table',
+        IndexName: "user_room_access_index",
+        KeyConditionExpression: "user_id = :userId",
+        ExpressionAttributeValues: { ":userId": userId },
+      })
+    );
+    const roomIds: string[] = [
+      ...new Set(roomAccessResult.Items?.map((item) => item.room_id) ?? []),
+    ];
+
+    let roomAccess: { room_id: string; building_id: string }[] = [];
+
+    if (roomIds.length > 0) {
+      // 7. Building names for each granted room, in one batch.
+      const roomsResult = await docClient.send(
+        new BatchGetCommand({
+          RequestItems: {
+            [ROOMS_TABLE]: { Keys: roomIds.map((id) => ({ room_id: id })) },
+          },
+        })
+      );
+      const roomsById = Object.fromEntries(
+        (roomsResult.Responses?.[ROOMS_TABLE] ?? []).map((r) => [r.room_id, r])
+      );
+
+      roomAccess = roomIds.map((id) => ({
+        room_id: id,
+        building_id: roomsById[id]?.building_id ?? "Unknown",
+      }));
+    }
+
     return res.status(200).json({
       user: {
         user_id: userResult.Item.user_id,
@@ -255,6 +300,7 @@ export async function getUserById(req: Request, res: Response) {
       },
       card,
       classrooms,
+      roomAccess,
     });
   } catch (err) {
     console.error("getUserById failed:", err);
