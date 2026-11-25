@@ -6,6 +6,7 @@ import cors from 'cors';
 import serverless from "serverless-http";
 import { loginRouter } from './routes/loginRoute.js';
 import { adminRouter } from './routes/adminRoute.js';
+import { studentRouter } from './routes/studentRoute.js';
 
 const app: Express = express();
 
@@ -26,6 +27,7 @@ app.get("/", (req: Request, res: Response) => {
 // Register routes
 app.use("/", loginRouter);
 app.use("/admin", adminRouter);
+app.use("/student", studentRouter)
 
 app.get('/api/users', (req: Request, res: Response) => {
     res.json({ message: "Success" });
@@ -36,6 +38,7 @@ const API_PREFIX = "/Attendance-Backend";
 
 app.use(API_PREFIX, loginRouter);
 app.use(`${API_PREFIX}/admin`, adminRouter);
+app.use(`${API_PREFIX}/student`, studentRouter);
 
 app.get(`${API_PREFIX}/api/users`, (req: Request, res: Response) => {
     res.json({ message: "Success" });

@@ -166,27 +166,3 @@ export async function refresh(req: Request, res: Response) {
     return res.status(500).json({ error: "Internal server error" });
   }
 }
-
-// ---- POST /logout ----
-// Deletes only this one session's refresh token record — per-session
-// logout, not logout-everywhere. Other devices/sessions are unaffected.
-export async function logout(req: Request, res: Response) {
-  try {
-    const tokenId = req.cookies?.refreshToken as string | undefined;
-
-    if (tokenId) {
-      await docClient.send(
-        new DeleteCommand({
-          TableName: REFRESH_TOKENS_TABLE,
-          Key: { token_id: tokenId },
-        })
-      );
-    }
-
-    res.clearCookie("refreshToken");
-    return res.status(200).json({ success: true });
-  } catch (err) {
-    console.error("logout failed:", err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-}
