@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { docClient } from "../db.js"
 import { PutCommand, ScanCommand, BatchWriteCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb"
-import type { AuthenticatedRequest } from "./tokenController.js";
+import type { AuthenticatedRequest } from "../middleware/authenticateToken.js";
 
 export async function createRoomAccess(req: AuthenticatedRequest, res: Response) {
   try {

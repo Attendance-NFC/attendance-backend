@@ -4,8 +4,8 @@ import type { Request, Response } from "express";
 import { docClient } from "../db.js"
 import { PutCommand, QueryCommand, ScanCommand, BatchGetCommand, GetCommand } from "@aws-sdk/lib-dynamodb"
 import { randomUUID } from "crypto"
-import type { AuthenticatedRequest } from "./tokenController.js";
-import { fetchUserProfile } from "./fetchUserProfile.js";
+import type { AuthenticatedRequest } from "../middleware/authenticateToken.js";
+import { fetchUserProfile } from "../utils/fetchUserProfile.js";
 
 
 const USERS_TABLE = process.env.USERS_TABLE ?? "users_table";
