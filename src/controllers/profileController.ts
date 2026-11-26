@@ -1,6 +1,6 @@
 import type { Response } from "express";
-import type { AuthenticatedRequest } from "./tokenController.js";
-import { fetchUserProfile } from "./fetchUserProfile.js";
+import type { AuthenticatedRequest } from "../middleware/authenticateToken.js";
+import { fetchUserProfile } from "../utils/fetchUserProfile.js";
 
 export async function getMyProfile(req: AuthenticatedRequest, res: Response) {
   try {

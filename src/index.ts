@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import express, { type Express, type Request, type Response } from "express";
 import cors from 'cors';
 import serverless from "serverless-http";
+import rateLimit from "express-rate-limit";
 import { loginRouter } from './routes/loginRoute.js';
 import { adminRouter } from './routes/adminRoute.js';
 import { studentRouter } from './routes/studentRoute.js';
@@ -17,6 +18,14 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN;
 app.use(express.json());
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(cookieParser());
+
+const globalRateLimit = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+	limit: 100, // Limit each IP to 100 requests per `window`.
+	standardHeaders: 'draft-8', // draft-6: `RateLimit-*` headers; draft-7 & draft-8: combined `RateLimit` header
+	legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
+})
+app.use(globalRateLimit)
 
 // Health check
 app.get("/", (req: Request, res: Response) => {

@@ -6,7 +6,7 @@ import { createClassroom, getClassrooms } from '../controllers/classroomControll
 import { getRooms, createRoomAccess, deleteRoomAccess } from '../controllers/roomController.js'
 import { createEnrollments } from '../controllers/enrollmentController.js'
 import { createSchedule, deleteSchedule } from '../controllers/scheduleController.js'
-import { authenticateToken, requireRole } from '../controllers/tokenController.js'
+import { authenticateToken, requireRole } from '../middleware/authenticateToken.js'
 
 export const adminRouter:Router = express.Router()
 

@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { docClient } from "../db.js"
 import { PutCommand, ScanCommand, BatchWriteCommand } from "@aws-sdk/lib-dynamodb"
 import { randomUUID } from "crypto"
-import type { AuthenticatedRequest } from "./tokenController.js";
+
 
 export async function createClassroom(req: Request, res: Response){
     try{

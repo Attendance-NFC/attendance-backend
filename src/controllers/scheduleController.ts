@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { docClient } from "../db.js"
 import { PutCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb"
-import type { AuthenticatedRequest } from "./tokenController.js";
+import type { AuthenticatedRequest } from "../middleware/authenticateToken.js";
 
 const SCHEDULE_TABLE = process.env.SCHEDULE_TABLE ?? "schedules_table";
 
